@@ -1,0 +1,59 @@
+{
+  "kind": "collectionType",
+  "collectionName": "players",
+  "info": {
+    "singularName": "player",
+    "pluralName": "players",
+    "displayName": "Player",
+    "description": "Игроки тирлиста CF"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "username": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "points": {
+      "type": "integer",
+      "required": true,
+      "default": 0,
+      "min": 0
+    },
+    "tier": {
+      "type": "enumeration",
+      "required": true,
+      "default": "T5",
+      "enum": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5"
+      ]
+    },
+    "playerStatus": {
+      "type": "enumeration",
+      "default": "Не подтвержден",
+      "enum": [
+        "Подтвержден",
+        "Не подтвержден"
+      ]
+    },
+    "confirmationDate": {
+      "type": "date"
+    },
+    "lastUpdate": {
+      "type": "string"
+    },
+    "videoLink": {
+      "type": "string"
+    },
+    "updateNote": {
+      "type": "text"
+    }
+  }
+}
