@@ -61,7 +61,7 @@ export default () => ({
         const url = `${CRISTALIX_API.baseUrl}/players/v1/getProfilesByNames?project_key=${CRISTALIX_API.projectKey}`;
 
         const response = await fetch(url, {
-          method: 'GET',
+          method: 'POST',
           headers: {
             'Authorization': `Bearer ${CRISTALIX_API.token}`,
             'Content-Type': 'application/json',
@@ -75,9 +75,10 @@ export default () => ({
         }
 
         const data: any = await response.json();
+        const profiles: any[] = Array.isArray(data) ? data : [];
 
         // Обрабатываем каждый профиль из ответа
-        for (const profile of data) {
+        for (const profile of profiles) {
           const username = profile?.username;
           const uuid = profile?.id;
           const skinUrl = profile?.textures?.skin;
@@ -94,7 +95,7 @@ export default () => ({
           result.set(username, { uuid, skinUrl });
         }
 
-        strapi.log.info(`Cristalix: загружено ${data.length} профилей из чанка ${chunk.length}`);
+        strapi.log.info(`Cristalix: загружено ${profiles.length} профилей из чанка ${chunk.length}`);
 
       } catch (error) {
         strapi.log.error(`Cristalix batch chunk error:`, error);
