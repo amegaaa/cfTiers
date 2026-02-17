@@ -33,6 +33,7 @@ async function getBrowser() {
   if (!browser) {
     browser = await puppeteer.launch({
       headless: true,
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium', // Используем системный Chromium
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
