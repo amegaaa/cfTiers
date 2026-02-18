@@ -430,11 +430,51 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiModePlayerModePlayer extends Struct.CollectionTypeSchema {
+  collectionName: 'mode_players';
+  info: {
+    description: '\u0418\u0433\u0440\u043E\u043A\u0438 \u0442\u043E\u043F\u043E\u0432 \u043F\u043E \u0440\u0435\u0436\u0438\u043C\u0430\u043C';
+    displayName: 'Mode Player (1x2 / 2x2 / 4x2)';
+    pluralName: 'mode-players';
+    singularName: 'mode-player';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::mode-player.mode-player'
+    > &
+      Schema.Attribute.Private;
+    mode: Schema.Attribute.Enumeration<['mode_1x2', 'mode_2x2', 'mode_4x2']> &
+      Schema.Attribute.Required;
+    points: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    username: Schema.Attribute.String & Schema.Attribute.Required;
+  };
+}
+
 export interface ApiPlayerPlayer extends Struct.CollectionTypeSchema {
   collectionName: 'players';
   info: {
-    description: '\u0418\u0433\u0440\u043E\u043A\u0438 \u0442\u0438\u0440\u043B\u0438\u0441\u0442\u0430 CF';
-    displayName: 'Player';
+    description: '\u0418\u0433\u0440\u043E\u043A\u0438 \u043E\u0431\u0449\u0435\u0433\u043E \u0442\u0438\u0440\u043B\u0438\u0441\u0442\u0430 CF';
+    displayName: 'Overall Player';
     pluralName: 'players';
     singularName: 'player';
   };
@@ -1033,6 +1073,7 @@ declare module '@strapi/strapi' {
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
+      'api::mode-player.mode-player': ApiModePlayerModePlayer;
       'api::player.player': ApiPlayerPlayer;
       'api::update.update': ApiUpdateUpdate;
       'plugin::content-releases.release': PluginContentReleasesRelease;

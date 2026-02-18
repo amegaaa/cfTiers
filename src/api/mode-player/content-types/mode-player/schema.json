@@ -1,0 +1,31 @@
+{
+  "kind": "collectionType",
+  "collectionName": "mode_players",
+  "info": {
+    "singularName": "mode-player",
+    "pluralName": "mode-players",
+    "displayName": "Mode Player (1x2 / 2x2 / 4x2)",
+    "description": "Игроки топов по режимам"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "username": {
+      "type": "string",
+      "required": true
+    },
+    "points": {
+      "type": "integer",
+      "required": true,
+      "default": 0,
+      "min": 0
+    },
+    "mode": {
+      "type": "enumeration",
+      "required": true,
+      "enum": ["mode_1x2", "mode_2x2", "mode_4x2"]
+    }
+  }
+}

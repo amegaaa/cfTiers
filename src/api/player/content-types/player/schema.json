@@ -4,8 +4,8 @@
   "info": {
     "singularName": "player",
     "pluralName": "players",
-    "displayName": "Player",
-    "description": "Игроки тирлиста CF"
+    "displayName": "Overall Player",
+    "description": "Игроки общего тирлиста CF"
   },
   "options": {
     "draftAndPublish": true
