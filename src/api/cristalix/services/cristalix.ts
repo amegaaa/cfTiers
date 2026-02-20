@@ -332,9 +332,11 @@ export default () => ({
         for (const profile of profiles) {
           const username = profile?.username;
           const uuid = profile?.id;
-          const skinUrl = profile?.textures?.skin;
 
-          if (!username || !uuid || !skinUrl) continue;
+          if (!username || !uuid) continue;
+
+          // Формируем URL скина из UUID (стандартный Minecraft URL)
+          const skinUrl = `https://webdata.c7x.dev/textures/skin/${uuid}.png`;
 
           playerCache.set(username.toLowerCase(), {
             uuid,
@@ -380,12 +382,14 @@ export default () => ({
       const data = await fetchWithBrowser(url, { headers });
 
       const uuid = data?.id;
-      const skinUrl = data?.textures?.skin;
 
-      if (!uuid || !skinUrl) {
-        strapi.log.warn(`Cristalix: данные не найдены для ${username}`);
+      if (!uuid) {
+        strapi.log.warn(`Cristalix: UUID не найден для ${username}`);
         return { uuid: null, skinUrl: null, headUrl: null };
       }
+
+      // Формируем URL скина из UUID (стандартный Minecraft URL)
+      const skinUrl = `https://webdata.c7x.dev/textures/skin/${uuid}.png`;
 
       // Сохраняем в кэш
       playerCache.set(username.toLowerCase(), { uuid, skinUrl, timestamp: Date.now() });
