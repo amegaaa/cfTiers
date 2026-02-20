@@ -5,6 +5,21 @@
 export default {
 
   /**
+   * GET /api/cristalix/health
+   * Проверка работоспособности сервиса
+   */
+  async health(ctx) {
+    const stats = strapi.service('api::cristalix.cristalix').getCacheStats();
+    return ctx.send({
+      status: 'ok',
+      cache: {
+        size: stats.size,
+        uptime: process.uptime(),
+      },
+    });
+  },
+
+  /**
    * GET /api/cristalix/skins
    * Получить скины для ВСЕХ игроков из базы одним запросом
    * Это главный endpoint — вызывается один раз при загрузке страницы
@@ -44,7 +59,13 @@ export default {
 
     } catch (error) {
       strapi.log.error('Error in getAllSkins:', error);
-      return ctx.internalServerError('Failed to fetch skins');
+      // Возвращаем пустой ответ вместо 500, чтобы фронт не падал
+      return ctx.send({
+        total: 0,
+        loaded: 0,
+        skins: {},
+        error: 'Failed to fetch skins, using default avatars',
+      });
     }
   },
 

@@ -1,10 +1,11 @@
 /**
- * Cristalix service — пакетная загрузка профилей игроков через Puppeteer
- * Использует headless браузер с stealth plugin для обхода Cloudflare protection
+ * Cristalix service — загрузка профилей игроков через Puppeteer или обычный fetch
+ * Оптимизировано для Railway: один браузер, очередь запросов, fallback без Puppeteer
  */
 
 import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { fetch } from 'undici';
 
 // Добавляем stealth plugin для обхода Cloudflare
 puppeteer.use(StealthPlugin());
@@ -24,137 +25,267 @@ const CRISTALIX_API = {
   token: process.env.CRISTALIX_TOKEN || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJjSSI6IjJmMmFlZjM4LWEyNjAtMTFlZC05ZDQyLTFjYjcyY2IwMTRhZSIsInBJeSI6ImVmM2QwNjQ5LTM4NmQtNDZjNi1iNjVlLTEwODAxOTEyYWI1NyIsInNJIjoiMWZiOTNmN2MtODE0NS00Zjk1LTllY2MtOWE2MjM2MmYxNDZlIiwiaWF0IjoxNzcxMjU1MzczLCJpc3MiOiJDcmlzdGFsaXhPcGVuQXBpIn0.vmA2l_gNfRrK6fCKRsz95rTHGKf7s1UTHXOmsrcCq4c',
 };
 
+// Очередь запросов для ограничения параллелизма
+const requestQueue: Array<() => Promise<void>> = [];
+const MAX_CONCURRENT_PAGES = 3; // Максимум 3 страницы одновременно
+let activePages = 0;
+
 let browser: any = null;
+let browserInitializePromise: Promise<any> | null = null;
 
 /**
- * Получить или создать браузер
+ * Инициализировать браузер (ленивая загрузка)
  */
-async function getBrowser() {
-  if (!browser) {
-    browser = await puppeteer.launch({
-      headless: true,
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium', // Используем системный Chromium
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-blink-features=AutomationControlled',
-        '--disable-features=IsolateOrigins,site-per-process',
-        '--window-size=1920,1080',
-      ],
-    });
-    
-    // Устанавливаем реалистичный User-Agent для всех страниц
-    const pages = await browser.pages();
-    for (const page of pages) {
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-    }
+async function initializeBrowser() {
+  if (!browserInitializePromise) {
+    browserInitializePromise = (async () => {
+      try {
+        browser = await puppeteer.launch({
+          headless: 'new',
+          executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--disable-blink-features=AutomationControlled',
+            '--disable-features=IsolateOrigins,site-per-process',
+            '--single-process',
+            '--no-zygote',
+            '--disable-accelerated-2d-canvas',
+            '--disable-hardware-animation',
+          ],
+        });
+        strapi.log.info('Puppeteer: браузер запущен');
+        return browser;
+      } catch (error) {
+        strapi.log.error('Puppeteer: не удалось запустить браузер, используем fallback', error);
+        browserInitializePromise = null;
+        return null;
+      }
+    })();
   }
-  return browser;
+  return browserInitializePromise;
 }
 
 /**
- * Выполнить fetch через Puppeteer
+ * Выполнить задачу с ограничением параллелизма
  */
-async function fetchWithBrowser(url: string, options: any = {}): Promise<any> {
-  const browserInstance = await getBrowser();
-  const page = await browserInstance.newPage();
+async function executeWithQueue(task: () => Promise<void>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const executeTask = async () => {
+      try {
+        activePages++;
+        await task();
+        resolve();
+      } catch (error) {
+        reject(error);
+      } finally {
+        activePages--;
+        processQueue();
+      }
+    };
+
+    const processQueue = () => {
+      if (activePages < MAX_CONCURRENT_PAGES && requestQueue.length > 0) {
+        const nextTask = requestQueue.shift();
+        if (nextTask) nextTask();
+      }
+    };
+
+    if (activePages < MAX_CONCURRENT_PAGES) {
+      executeTask();
+    } else {
+      requestQueue.push(executeTask);
+    }
+  });
+}
+
+/**
+ * Обычный fetch с заголовками (fallback)
+ */
+async function fetchWithFallback(url: string, options: any = {}): Promise<any> {
+  const authToken = CRISTALIX_API.token.startsWith('Bearer ')
+    ? CRISTALIX_API.token
+    : `Bearer ${CRISTALIX_API.token}`;
 
   try {
-    strapi.log.info(`Puppeteer: запрос к ${url}`);
+    strapi.log.info(`Fetch: запрос к ${url}`);
 
-    // Включаем перехват запросов
-    await page.setRequestInterception(true);
-
-    // Перехватываем все запросы и добавляем заголовки
-    page.on('request', (interceptedRequest) => {
-      const headers = {
-        ...interceptedRequest.headers(),
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': authToken,
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         ...(options.headers || {}),
-      };
-      
-      // Логируем заголовки для отладки
-      const authHeader = headers['Authorization'] || headers['authorization'];
-      strapi.log.info(`Puppeteer: Authorization заголовок = "${authHeader}"`);
-      strapi.log.info(`Puppeteer: URL = ${interceptedRequest.url()}`);
-      
-      interceptedRequest.continue({ headers });
+      },
     });
 
-    // Открываем страницу API - она пройдёт Cloudflare как браузер
-    const response = await page.goto(url, {
-      waitUntil: 'networkidle0',
-      timeout: 30000,
-    });
-
-    const status = response?.status();
-    strapi.log.info(`Puppeteer: статус ${status}`);
-
-    // Извлекаем JSON из тела ответа
-    const jsonText = await page.evaluate(() => {
-      // @ts-ignore
-      const body = document.body;
-      // @ts-ignore
-      const preTag = document.querySelector('pre');
-      
-      if (preTag) {
-        return preTag.textContent;
-      }
-      
-      return body.textContent || body.innerText;
-    });
-
-    strapi.log.info(`Puppeteer: ответ (первые 200 символов): ${jsonText?.substring(0, 200)}`);
-
-    await page.close();
-
-    // Парсим JSON
-    try {
-      const parsed = JSON.parse(jsonText || '{}');
-      strapi.log.info(`Puppeteer: успешно распарсен JSON`);
-      return parsed;
-    } catch (e) {
-      strapi.log.error('Puppeteer: Failed to parse JSON:', jsonText?.substring(0, 500));
-      throw new Error('Invalid JSON response');
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
+    const data = await response.json();
+    strapi.log.info(`Fetch: успешно получено`);
+    return data;
+
   } catch (error) {
-    strapi.log.error('Puppeteer error:', error);
-    await page.close();
+    strapi.log.error(`Fetch error:`, error);
     throw error;
   }
+}
+
+/**
+ * POST запрос через обычный fetch (fallback)
+ */
+async function postWithFallback(url: string, body: any, headers: any): Promise<any> {
+  const authToken = CRISTALIX_API.token.startsWith('Bearer ')
+    ? CRISTALIX_API.token
+    : `Bearer ${CRISTALIX_API.token}`;
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': authToken,
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        ...headers,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const text = await response.text();
+    return JSON.parse(text);
+
+  } catch (error) {
+    strapi.log.error(`POST fetch error:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Выполнить fetch через Puppeteer (основной метод)
+ */
+async function fetchWithBrowser(url: string, options: any = {}): Promise<any> {
+  return executeWithQueue(async () => {
+    const browserInstance = await initializeBrowser();
+    
+    if (!browserInstance) {
+      // Браузер не доступен, используем fallback
+      strapi.log.info('Puppeteer недоступен, используем обычный fetch');
+      return fetchWithFallback(url, options);
+    }
+
+    const page = await browserInstance.newPage();
+    let success = false;
+
+    try {
+      // Устанавливаем таймаут
+      page.setDefaultTimeout(15000);
+
+      // Устанавливаем заголовки до навигации
+      await page.setExtraHTTPHeaders({
+        'Authorization': options.headers?.Authorization || '',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      });
+
+      strapi.log.info(`Puppeteer: запрос к ${url}`);
+
+      // Открываем страницу
+      const response = await page.goto(url, {
+        waitUntil: 'domcontentloaded',
+        timeout: 15000,
+      });
+
+      const status = response?.status();
+      strapi.log.info(`Puppeteer: статус ${status}`);
+
+      // Извлекаем текст со страницы
+      const jsonText = await page.evaluate(() => {
+        const preTag = document.querySelector('pre');
+        if (preTag) return preTag.textContent;
+        return document.body.textContent || document.body.innerText;
+      });
+
+      strapi.log.info(`Puppeteer: ответ (первые 200 символов): ${jsonText?.substring(0, 200)}`);
+
+      // Парсим JSON
+      try {
+        const parsed = JSON.parse(jsonText || '{}');
+        strapi.log.info(`Puppeteer: успешно распарсен JSON`);
+        success = true;
+        return parsed;
+      } catch (e) {
+        strapi.log.error('Puppeteer: Failed to parse JSON:', jsonText?.substring(0, 500));
+        throw new Error('Invalid JSON response');
+      }
+
+    } catch (error) {
+      strapi.log.error('Puppeteer error, используем fallback:', (error as Error).message);
+      // При ошибке пробуем обычный fetch
+      return fetchWithFallback(url, options);
+    } finally {
+      // Всегда закрываем страницу
+      try {
+        await page.close();
+      } catch (e) {
+        // Игнорируем ошибки закрытия
+      }
+    }
+  });
 }
 
 /**
  * POST запрос через Puppeteer
  */
 async function postWithBrowser(url: string, body: any, headers: any): Promise<any> {
-  const browserInstance = await getBrowser();
-  const page = await browserInstance.newPage();
+  return executeWithQueue(async () => {
+    const browserInstance = await initializeBrowser();
+    
+    if (!browserInstance) {
+      strapi.log.info('Puppeteer недоступен, используем обычный fetch');
+      return postWithFallback(url, body, headers);
+    }
 
-  try {
-    // Устанавливаем заголовки
-    await page.setExtraHTTPHeaders(headers);
+    const page = await browserInstance.newPage();
+    let success = false;
 
-    // Выполняем POST через page.evaluate
-    const result = await page.evaluate(async (apiUrl, apiBody, apiHeaders) => {
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: apiHeaders,
-        body: JSON.stringify(apiBody),
-      });
-      return await response.text();
-    }, url, body, headers);
+    try {
+      page.setDefaultTimeout(15000);
+      await page.setExtraHTTPHeaders(headers);
 
-    await page.close();
+      strapi.log.info(`Puppeteer POST: ${url}`);
 
-    return JSON.parse(result);
+      const result = await page.evaluate(async (apiUrl, apiBody, apiHeaders) => {
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: apiHeaders,
+          body: JSON.stringify(apiBody),
+        });
+        return await response.text();
+      }, url, body, headers);
 
-  } catch (error) {
-    await page.close();
-    throw error;
-  }
+      strapi.log.info(`Puppeteer POST: ответ получен`);
+      success = true;
+      return JSON.parse(result);
+
+    } catch (error) {
+      strapi.log.error('Puppeteer POST error, используем fallback:', (error as Error).message);
+      return postWithFallback(url, body, headers);
+    } finally {
+      try {
+        await page.close();
+      } catch (e) {
+        // Игнорируем ошибки закрытия
+      }
+    }
+  });
 }
 
 export default () => ({
@@ -178,7 +309,7 @@ export default () => ({
       return result;
     }
 
-    strapi.log.info(`Cristalix: загружаем ${toFetch.length} игроков через Puppeteer`);
+    strapi.log.info(`Cristalix: загружаем ${toFetch.length} игроков`);
 
     // Разбиваем на чанки по 50
     const chunks: string[][] = [];
@@ -189,7 +320,7 @@ export default () => ({
     for (const chunk of chunks) {
       try {
         const url = `${CRISTALIX_API.baseUrl}/players/v1/getProfilesByNames?project_key=${CRISTALIX_API.projectKey}`;
-        
+
         const headers = {
           'Authorization': `Bearer ${CRISTALIX_API.token}`,
           'Content-Type': 'application/json',
@@ -214,7 +345,7 @@ export default () => ({
           result.set(username, { uuid, skinUrl });
         }
 
-        strapi.log.info(`Cristalix: загружено ${profiles.length} из ${chunk.length} через браузер`);
+        strapi.log.info(`Cristalix: загружено ${profiles.length} из ${chunk.length}`);
 
       } catch (error) {
         strapi.log.error(`Cristalix batch error:`, error);
@@ -236,19 +367,18 @@ export default () => ({
     try {
       const url = `${CRISTALIX_API.baseUrl}/players/v1/getProfileByName?playerName=${encodeURIComponent(username)}&project_key=${CRISTALIX_API.projectKey}`;
 
-      // Токен уже содержит "Bearer " или нет?
-      const authToken = CRISTALIX_API.token.startsWith('Bearer ') 
-        ? CRISTALIX_API.token 
+      const authToken = CRISTALIX_API.token.startsWith('Bearer ')
+        ? CRISTALIX_API.token
         : `Bearer ${CRISTALIX_API.token}`;
 
       const headers = {
         'Authorization': authToken,
       };
 
-      strapi.log.info(`Cristalix: отправляем токен: ${authToken.substring(0, 30)}...`);
+      strapi.log.info(`Cristalix: токен ${authToken.substring(0, 30)}...`);
 
       const data = await fetchWithBrowser(url, { headers });
-      
+
       const uuid = data?.id;
       const skinUrl = data?.textures?.skin;
 
@@ -259,7 +389,7 @@ export default () => ({
 
       // Сохраняем в кэш
       playerCache.set(username.toLowerCase(), { uuid, skinUrl, timestamp: Date.now() });
-      
+
       return { uuid, skinUrl, headUrl: skinUrl };
 
     } catch (error) {
@@ -294,6 +424,7 @@ export default () => ({
     if (browser) {
       await browser.close();
       browser = null;
+      browserInitializePromise = null;
       strapi.log.info('Puppeteer browser closed');
     }
   },

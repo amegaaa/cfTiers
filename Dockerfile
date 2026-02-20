@@ -26,7 +26,8 @@ RUN apt-get update && apt-get install -y \
     libasound2 \
     libxshmfence1 \
     --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get autoremove -y
 
 # Устанавливаем рабочую директорию
 WORKDIR /app
@@ -34,7 +35,7 @@ WORKDIR /app
 # Копируем package.json и package-lock.json
 COPY package*.json ./
 
-# Устанавливаем зависимости
+# Устанавливаем зависимости (без dev)
 RUN npm ci --only=production
 
 # Копируем весь проект
@@ -43,9 +44,13 @@ COPY . .
 # Билдим проект
 RUN npm run build
 
-# Указываем Puppeteer использовать установленный Chromium
+# Переменные окружения для Puppeteer
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV NODE_ENV=production
+
+# Переменные для экономии памяти в контейнере
+ENV NODE_OPTIONS="--max-old-space-size=512"
 
 # Открываем порт
 EXPOSE 1337

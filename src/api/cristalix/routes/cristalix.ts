@@ -5,6 +5,17 @@
 export default {
   routes: [
     {
+      // Health check endpoint
+      method: 'GET',
+      path: '/cristalix/health',
+      handler: 'cristalix.health',
+      config: {
+        auth: false,
+        policies: [],
+        middlewares: [],
+      },
+    },
+    {
       // ГЛАВНЫЙ endpoint - все скины одним запросом
       method: 'GET',
       path: '/cristalix/skins',
