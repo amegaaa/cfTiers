@@ -71,13 +71,13 @@ async function initializeBrowser() {
 /**
  * Выполнить задачу с ограничением параллелизма
  */
-async function executeWithQueue(task: () => Promise<void>): Promise<void> {
+async function executeWithQueue<T>(task: () => Promise<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     const executeTask = async () => {
       try {
         activePages++;
-        await task();
-        resolve();
+        const result = await task();
+        resolve(result);
       } catch (error) {
         reject(error);
       } finally {
@@ -381,10 +381,13 @@ export default () => ({
 
       const data = await fetchWithBrowser(url, { headers });
 
+      // Отладка: логируем полный ответ
+      strapi.log.info(`Cristalix ответ для ${username}:`, JSON.stringify(data).substring(0, 300));
+
       const uuid = data?.id;
 
       if (!uuid) {
-        strapi.log.warn(`Cristalix: UUID не найден для ${username}`);
+        strapi.log.warn(`Cristalix: UUID не найден для ${username}. Полный ответ:`, JSON.stringify(data));
         return { uuid: null, skinUrl: null, headUrl: null };
       }
 
