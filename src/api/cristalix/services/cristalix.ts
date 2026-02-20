@@ -41,7 +41,7 @@ async function initializeBrowser() {
     browserInitializePromise = (async () => {
       try {
         browser = await puppeteer.launch({
-          headless: 'new',
+          headless: true,
           executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
           args: [
             '--no-sandbox',
