@@ -524,6 +524,47 @@ export interface ApiPlayerPlayer extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiTierlistChangelogTierlistChangelog
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'tierlist_changelogs';
+  info: {
+    description: '\u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439 \u0442\u0438\u0440\u043B\u0438\u0441\u0442\u0430';
+    displayName: 'Tierlist Changelog';
+    pluralName: 'tierlist-changelogs';
+    singularName: 'tierlist-changelog';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    changelogType: Schema.Attribute.Enumeration<
+      [
+        '\u0440\u0435\u043B\u0438\u0437',
+        '\u0438\u0433\u0440\u043E\u043A\u0438',
+        '\u043A\u0430\u043B\u0438\u0431\u0440\u043E\u0432\u043A\u0430',
+        '\u0442\u0443\u0440\u043D\u0438\u0440',
+        '\u0440\u0435\u0431\u0430\u043B\u0430\u043D\u0441',
+      ]
+    >;
+    changes: Schema.Attribute.RichText & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    date: Schema.Attribute.Date & Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::tierlist-changelog.tierlist-changelog'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    version: Schema.Attribute.String & Schema.Attribute.Required;
+  };
+}
+
 export interface ApiUpdateUpdate extends Struct.CollectionTypeSchema {
   collectionName: 'updates';
   info: {
@@ -1075,6 +1116,7 @@ declare module '@strapi/strapi' {
       'admin::user': AdminUser;
       'api::mode-player.mode-player': ApiModePlayerModePlayer;
       'api::player.player': ApiPlayerPlayer;
+      'api::tierlist-changelog.tierlist-changelog': ApiTierlistChangelogTierlistChangelog;
       'api::update.update': ApiUpdateUpdate;
       'plugin::content-releases.release': PluginContentReleasesRelease;
       'plugin::content-releases.release-action': PluginContentReleasesReleaseAction;
