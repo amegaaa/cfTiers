@@ -577,11 +577,12 @@ export interface ApiUpdateUpdate extends Struct.CollectionTypeSchema {
     draftAndPublish: true;
   };
   attributes: {
-    content: Schema.Attribute.RichText & Schema.Attribute.Required;
+    bugfix: Schema.Attribute.RichText;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     date: Schema.Attribute.Date & Schema.Attribute.Required;
+    game: Schema.Attribute.RichText;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -589,16 +590,11 @@ export interface ApiUpdateUpdate extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private;
     publishedAt: Schema.Attribute.DateTime;
+    rebalance: Schema.Attribute.RichText;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
-    updateType: Schema.Attribute.Enumeration<
-      [
-        '\u0440\u0435\u0431\u0430\u043B\u0430\u043D\u0441',
-        '\u0438\u0433\u0440\u0430',
-        '\u0431\u0430\u0433\u0444\u0438\u043A\u0441',
-      ]
-    >;
+    updateType: Schema.Attribute.Component<'update.update-type', true>;
     version: Schema.Attribute.String & Schema.Attribute.Required;
   };
 }

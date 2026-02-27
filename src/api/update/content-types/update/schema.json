@@ -20,17 +20,22 @@
       "type": "date",
       "required": true
     },
-    "content": {
+    "rebalance": {
       "type": "richtext",
-      "required": true
+      "required": false
+    },
+    "game": {
+      "type": "richtext",
+      "required": false
+    },
+    "bugfix": {
+      "type": "richtext",
+      "required": false
     },
     "updateType": {
-      "type": "enumeration",
-      "enum": [
-        "ребаланс",
-        "игра",
-        "багфикс"
-      ]
+      "type": "component",
+      "repeatable": true,
+      "component": "update.update-type"
     }
   }
 }
